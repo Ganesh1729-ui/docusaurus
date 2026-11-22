@@ -549,6 +549,44 @@ describe('writeMarkdownHeadingId', () => {
         ### def {/* #def */}
       `);
     });
+
+    it('does not modify headings inside tilde or longer fenced code blocks', () => {
+      expect(
+        write(dedent`
+          # Fenced code reproduction
+
+          ~~~md
+          ## Reusable API
+          ~~~
+
+          ## Reusable API
+
+          \`\`\`\`md
+          \`\`\`
+          ## Inner heading
+          \`\`\`
+          \`\`\`\`
+
+          ## Outside heading
+        `),
+      ).toEqual(dedent`
+        # Fenced code reproduction
+
+        ~~~md
+        ## Reusable API
+        ~~~
+
+        ## Reusable API {#reusable-api}
+
+        \`\`\`\`md
+        \`\`\`
+        ## Inner heading
+        \`\`\`
+        \`\`\`\`
+
+        ## Outside heading {#outside-heading}
+      `);
+    });
   });
 
   describe('mdx-comment syntax', () => {

@@ -127,6 +127,31 @@ export type WriteHeadingIDOptions = SluggerOptions & {
   overwrite?: boolean;
 };
 
+type CodeFenceState = {fence: {char: string; length: number} | null};
+
+function isCodeLine(line: string, state: CodeFenceState): boolean {
+  if (!state.fence) {
+    const match = /^\s{0,3}(?<fence>`{3,}|~{3,})/.exec(line);
+    if (match) {
+      state.fence = {
+        char: match.groups!.fence![0]!,
+        length: match.groups!.fence!.length,
+      };
+      return true;
+    }
+    return false;
+  }
+  const match = /^\s{0,3}(?<fence>`{3,}|~{3,})\s*$/.exec(line);
+  if (
+    match &&
+    match.groups!.fence![0] === state.fence.char &&
+    match.groups!.fence!.length >= state.fence.length
+  ) {
+    state.fence = null;
+  }
+  return true;
+}
+
 /**
  * Takes Markdown content, returns new content with heading IDs written.
  * Respects existing IDs (unless `overwrite=true`) and never generates colliding
@@ -166,7 +191,11 @@ export function writeMarkdownHeadingId(
   // If we can't overwrite existing slugs, make sure other headings don't
   // generate colliding slugs by first marking these slugs as occupied
   if (!overwrite) {
+    const state: CodeFenceState = {fence: null};
     lines.forEach((line) => {
+      if (isCodeLine(line, state) || !line.startsWith('##')) {
+        return;
+      }
       const parsedHeading = parseHeadingIdAnySyntax(line);
       if (parsedHeading.id) {
         slugger.slug(parsedHeading.id);
@@ -174,15 +203,11 @@ export function writeMarkdownHeadingId(
     });
   }
 
-  let inCode = false;
+  const state: CodeFenceState = {fence: null};
   return lines
     .map((line) => {
-      if (line.startsWith('```')) {
-        inCode = !inCode;
-        return line;
-      }
-      // Ignore h1 headings, as we don't create anchor links for those
-      if (inCode || !line.startsWith('##')) {
+      // Ignore h1 headings and headings inside code blocks
+      if (isCodeLine(line, state) || !line.startsWith('##')) {
         return line;
       }
       const parsedHeading = parseHeadingIdAnySyntax(line);
